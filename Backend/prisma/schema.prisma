@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -16,7 +16,7 @@ model User {
   email     String     @unique
   name      String
   password  String     // hashed with bcrypt
-  role      UserRole   @default(USER)
+  role      String     @default("USER") // USER or ADMIN
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 
@@ -27,21 +27,16 @@ model User {
   @@index([email])
 }
 
-enum UserRole {
-  USER
-  ADMIN
-}
-
 // Research data model - stores papers, journals, conferences
 model ResearchPaper {
   id          String   @id @default(cuid())
   title       String
-  authors     String[] // array of author names
-  type        ResearchType
+  authors     String   // JSON array of author names
+  type        String   // PAPER, JOURNAL, or CONFERENCE
   content     String   // abstract or summary
   source      String   // URL or citation source
   publishDate DateTime?
-  tags        String[] // for easy filtering
+  tags        String   // JSON array for easy filtering
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -53,13 +48,6 @@ model ResearchPaper {
   @@index([userId])
   @@index([type])
   @@index([title])
-  @@index([tags])
-}
-
-enum ResearchType {
-  PAPER
-  JOURNAL
-  CONFERENCE
 }
 
 // Bookmark model - user's favorite research items

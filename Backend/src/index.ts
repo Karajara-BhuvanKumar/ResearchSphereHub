@@ -37,6 +37,18 @@ if (config.nodeEnv === "development") {
 }
 
 /**
+ * Root endpoint
+ */
+app.get("/", (req: Request, res: Response) => {
+  res.json({
+    success: true,
+    message: "Welcome to ResearchSphereHub API",
+    version: "1.0.0",
+    timestamp: new Date().toISOString(),
+  });
+});
+
+/**
  * Health check endpoint
  */
 app.get("/api/health", (req: Request, res: Response) => {
