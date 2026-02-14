@@ -1,0 +1,641 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   RESEARCHSPHEREHUB - COMPLETE SYSTEM ARCHITECTURE & FLOWS
+   Visual Diagrams & Explanations
+   ═════════════════════════════════════════════════════════════════════════════ */
+
+
+📊 SYSTEM ARCHITECTURE DIAGRAM
+═══════════════════════════════════════════════════════════════════════════════
+
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                          CLIENT (Browser)                                    │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  React Application (http://localhost:5173)                              │ │
+│  │  ├─ Pages (Login, Search, Bookmarks, Upload)                           │ │
+│  │  ├─ Components (buttons, forms, lists)                                 │ │
+│  │  ├─ Services (authService, researchService, etc)                       │ │
+│  │  └─ State Management (useState, useContext)                            │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   ▲
+                                   │ HTTP REST API
+                                   │ JSON payloads
+                                   │ Authorization header
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         BACKEND SERVER                                       │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │  Express.js Application (http://localhost:5000)                        │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐  │ │
+│  │  │ Request → Routes → Controllers → Services → Database → Response │  │ │
+│  │  └──────────────────────────────────────────────────────────────────┘  │ │
+│  │                                                                    │ │
+│  │  Routes:                Controllers:              Services:       │ │
+│  │  ├─ /auth/*            ├─ authController         ├─ userService  │ │
+│  │  ├─ /research/*        ├─ researchController     ├─ researchSvc  │ │
+│  │  └─ /bookmarks/*       └─ bookmarkController     └─ bookmarkSvc  │ │
+│  │                                                                    │ │
+│  │  Middleware:                                                       │ │
+│  │  ├─ authMiddleware     (JWT verification)                         │ │
+│  │  ├─ validation         (Input validation)                         │ │
+│  │  ├─ errorHandler       (Error handling)                           │ │
+│  │  └─ cors               (Cross-origin requests)                    │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────────┘
+                                   ▲
+                                   │ Prisma ORM
+                                   │ SQL Queries
+                                   ▼
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                      POSTGRESQL DATABASE                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────┐ │
+│  │ Tables:                                                                 │ │
+│  │ ├─ User (id, email, password, name, role)                             │ │
+│  │ ├─ ResearchPaper (id, title, authors, type, content, userId)          │ │
+│  │ └─ Bookmark (id, userId, paperId)                                    │ │
+│  │                                                                      │ │
+│  │ Relationships:                                                       │ │
+│  │ ├─ User (1) ──→ (Many) ResearchPaper                               │ │
+│  │ ├─ User (1) ──→ (Many) Bookmark ←── (Many) ResearchPaper           │ │
+│  └─────────────────────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+🔑 AUTHENTICATION FLOW (JWT)
+═══════════════════════════════════════════════════════════════════════════════
+
+1️⃣ USER REGISTRATION
+────────────────────
+
+User enters credentials in Frontend
+    ↓
+Frontend POST /api/auth/register
+    ├─ email: "user@example.com"
+    ├─ name: "John Doe"
+    ├─ password: "password123"
+    └─ confirmPassword: "password123"
+    ↓
+Express receives request
+    ↓
+Validation middleware checks inputs
+    ↓
+Auth handler calls UserService.register()
+    ├─ Check if email already exists
+    ├─ Hash password with bcrypt
+    │  (password123 → $2b$10$encrypted_hash)
+    ├─ Insert user into database
+    ├─ Generate JWT token
+    │  Header: { alg: "HS256" }
+    │  Payload: { id, email, role, exp }
+    │  Signature: HMAC-SHA256
+    └─ Return token to frontend
+    ↓
+Frontend receives response
+    ├─ Saves token in localStorage
+    └─ Redirects to home page
+
+
+2️⃣ USER LOGIN
+──────────────
+
+User enters email & password
+    ↓
+Frontend POST /api/auth/login
+    ├─ email: "user@example.com"
+    └─ password: "password123"
+    ↓
+Express receives request
+    ↓
+Auth handler calls UserService.login()
+    ├─ Find user by email
+    ├─ Compare password with hashed version
+    │  bcrypt.compare("password123", hash)
+    ├─ If match, generate JWT token
+    └─ Return token to frontend
+    ↓
+Frontend saves token in localStorage
+
+
+3️⃣ MAKING PROTECTED REQUESTS
+─────────────────────────────
+
+Frontend wants to create a paper
+    ↓
+Get token from localStorage
+    ↓
+Frontend GET /api/research/create
+    ├─ Headers: {
+    │    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIs..."
+    │  }
+    └─ Body: { title, authors, content, ... }
+    ↓
+Express receives request
+    ↓
+authMiddleware checks Authorization header
+    ├─ Extract token from "Bearer {token}"
+    ├─ Verify token with JWT_SECRET
+    │  If signature doesn't match → Invalid!
+    │  If token expired → Expired!
+    ├─ Decode token to get user id, email, role
+    └─ Attach decoded user to request object
+    ↓
+Controller receives request with user info
+    ├─ User available as req.user.id
+    ├─ Creates paper with userId = req.user.id
+    └─ Returns saved paper
+    ↓
+Frontend receives paper
+
+
+═══════════════════════════════════════════════════════════════════════════════
+📡 API REQUEST/RESPONSE FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+REQUEST FLOW (Frontend → Backend → Database)
+─────────────────────────────────────────────
+
+Frontend Call: researchService.searchPapers("AI", "PAPER", ["ML"])
+    ↓
+Axios creates GET request:
+    URL: http://localhost:5000/api/research/search?search=AI&type=PAPER&tags=ML
+    ├─ Headers: {
+    │    "Authorization": "Bearer {token}",
+    │    "Content-Type": "application/json"
+    │  }
+    └─ Timeout: 30s
+    ↓
+Express Route Matcher:
+    GET /api/research/search
+    ↓
+Validation Rules Check:
+    ├─ type must be in ["PAPER", "JOURNAL", "CONFERENCE"] ✓
+    ├─ limit must be number ≤ 100 ✓
+    └─ offset must be ≥ 0 ✓
+    ↓
+If validation fails:
+    → Send 400 Bad Request with errors
+    ↓
+researchController.searchResearchPapers()
+    ├─ Parse query parameters
+    ├─ Build filter object:
+    │  {
+    │    type: "PAPER",
+    │    tags: { hasSome: ["ML"] },
+    │    OR: [
+    │      { title: { contains: "AI" } },
+    │      { content: { contains: "AI" } },
+    │      { authors: { hasSome: ["AI"] } }
+    │    ]
+    │  }
+    └─ Call researchService.searchResearchPapers(filters)
+    ↓
+Prisma executes query:
+    SELECT * FROM "ResearchPaper"
+    WHERE type = 'PAPER'
+        AND tags && ARRAY['ML']
+        AND (
+            title ILIKE '%AI%'
+            OR content ILIKE '%AI%'
+            OR 'AI' = ANY(authors)
+        )
+    ORDER BY "createdAt" DESC
+    LIMIT 10 OFFSET 0
+    ↓
+PostgreSQL Database Search:
+    ├─ Check ResearchPaper table
+    ├─ Apply filters
+    ├─ Get total count
+    └─ Return results (10 papers)
+    ↓
+Prisma returns array of papers:
+    [
+      {
+        id: "paper-1",
+        title: "Machine Learning in AI",
+        authors: ["John Doe"],
+        type: "PAPER",
+        ...
+      },
+      ...
+    ]
+    ↓
+Controller formats response:
+    sendSuccess(res, {
+      data: papers,
+      total: 47,
+      limit: 10,
+      offset: 0,
+      pages: 5
+    })
+    ↓
+Express sends HTTP 200 response:
+    {
+      "success": true,
+      "message": "Search completed",
+      "data": {
+        "data": [...],
+        "total": 47,
+        "limit": 10,
+        "offset": 0,
+        "pages": 5
+      }
+    }
+    ↓
+Browser receives JSON response
+    ↓
+Axios parses JSON
+    ↓
+Frontend updates state with papers
+    ↓
+React re-renders search results
+    ↓
+User sees papers on screen ✓
+
+
+═══════════════════════════════════════════════════════════════════════════════
+📋 COMPLETE REQUEST LIFECYCLE EXAMPLE: Create Paper
+═══════════════════════════════════════════════════════════════════════════════
+
+STEP 1: Frontend Initiates Request
+──────────────────────────────────
+User fills form and clicks "Create Paper"
+
+Form Data:
+{
+  title: "AI in Healthcare",
+  authors: ["John Smith", "Jane Doe"],
+  type: "PAPER",
+  content: "This paper explores the intersection of artificial...",
+  source: "https://arxiv.org/abs/2302.01234",
+  publishDate: "2023-02-01",
+  tags: ["AI", "Healthcare", "ML"]
+}
+
+Frontend calls:
+  researchService.createResearchPaper(
+    "AI in Healthcare",
+    ["John Smith", "Jane Doe"],
+    "PAPER",
+    "This paper explores...",
+    "https://arxiv.org/abs/2302.01234",
+    "2023-02-01",
+    ["AI", "Healthcare", "ML"]
+  )
+
+Which translates to:
+  POST http://localhost:5000/api/research HTTP/1.1
+  Content-Type: application/json
+  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+  {
+    "title": "AI in Healthcare",
+    "authors": ["John Smith", "Jane Doe"],
+    "type": "PAPER",
+    "content": "This paper explores...",
+    "source": "https://arxiv.org/abs/2302.01234",
+    "publishDate": "2023-02-01T00:00:00Z",
+    "tags": ["AI", "Healthcare", "ML"]
+  }
+
+
+STEP 2: Express Processes Request
+──────────────────────────────────
+Express receives POST request and matches it to route:
+  POST /api/research (in researchRoutes.ts)
+
+Middleware executes in order:
+  1️⃣ authMiddleware
+     ├─ Extracts token from header
+     ├─ Verifies signature with JWT_SECRET
+     ├─ Decodes payload
+     └─ Attaches to request: req.user = { id: "user-123", email: "...", role: "USER" }
+
+  2️⃣ researchValidation.create
+     ├─ Checks title is not empty
+     ├─ Checks authors is array with ≥1 item
+     ├─ Checks type is valid enum
+     ├─ Checks content is not empty
+     ├─ Checks source is not empty
+     ├─ Checks publishDate is valid ISO date (optional)
+     └─ Checks tags is array (optional)
+
+  3️⃣ handleValidationErrors
+     ├─ If any validation failed, send 400 error
+     └─ If all passed, continue to controller
+
+  4️⃣ ResearchController.createResearchPaper()
+     ├─ Check if user authenticated (req.user exists) ✓
+     ├─ Extract data from req.body
+     ├─ Call ResearchService.createResearchPaper()
+     │
+     └─ Service execution:
+           ├─ Call prisma.researchPaper.create({
+           │    data: {
+           │      title: "AI in Healthcare",
+           │      authors: ["John Smith", "Jane Doe"],
+           │      type: "PAPER",
+           │      content: "This paper explores...",
+           │      source: "https://arxiv.org/abs/2302.01234",
+           │      publishDate: new Date("2023-02-01"),
+           │      tags: ["AI", "Healthcare", "ML"],
+           │      userId: "user-123"  ← ⚠️  Important: Links to user
+           │    }
+           │  })
+           │
+           └─ Prisma generates SQL and executes:
+                INSERT INTO "ResearchPaper"
+                (id, title, authors, type, content, source, publishDate, tags, userId, createdAt, updatedAt)
+                VALUES
+                ('generated-uuid', 'AI in Healthcare', '{"John Smith","Jane Doe"}', 'PAPER', '...', '...', '2023-02-01', '{"AI","Healthcare","ML"}', 'user-123', NOW(), NOW())
+
+               Database returns created record with all fields including generated ID
+
+
+STEP 3: Database Stores Data
+────────────────────────────
+PostgreSQL executes INSERT statement:
+  ├─ Generates unique ID for paper
+  ├─ Validates foreign key (userId exists)
+  ├─ Inserts into ResearchPaper table
+  ├─ Indexes by userId, type, title, tags for future searches
+  └─ Returns complete record
+
+
+STEP 4: Response Sent Back
+──────────────────────────
+Prisma returns created paper object:
+{
+  id: "clh3bjk5n0000qhz3c1d2e3f4",
+  title: "AI in Healthcare",
+  authors: ["John Smith", "Jane Doe"],
+  type: "PAPER",
+  content: "This paper explores...",
+  source: "https://arxiv.org/abs/2302.01234",
+  publishDate: "2023-02-01T00:00:00.000Z",
+  tags: ["AI", "Healthcare", "ML"],
+  userId: "user-123",
+  createdAt: "2024-02-14T10:30:45.123Z",
+  updatedAt: "2024-02-14T10:30:45.123Z"
+}
+
+sendSuccess() formats response:
+{
+  "success": true,
+  "message": "Research paper created successfully",
+  "data": {
+    "id": "clh3bjk5n0000qhz3c1d2e3f4",
+    "title": "AI in Healthcare",
+    "authors": ["John Smith", "Jane Doe"],
+    "type": "PAPER",
+    "content": "This paper explores...",
+    "source": "https://arxiv.org/abs/2302.01234",
+    "publishDate": "2023-02-01T00:00:00.000Z",
+    "tags": ["AI", "Healthcare", "ML"],
+    "userId": "user-123",
+    "createdAt": "2024-02-14T10:30:45.123Z",
+    "updatedAt": "2024-02-14T10:30:45.123Z"
+  }
+}
+
+Express sends HTTP 201 Created with response body
+
+
+STEP 5: Frontend Receives Response
+──────────────────────────────────
+Axios interceptor receives response:
+  ├─ Checks status (201 Created) ✓
+  ├─ Parses JSON
+  └─ Returns data.data (the created paper object)
+
+Frontend code:
+  const response = await researchService.createResearchPaper(...)
+  console.log(response)
+  // {
+  //   id: "clh3bjk5n0000qhz3c1d2e3f4",
+  //   title: "AI in Healthcare",
+  //   ...
+  // }
+
+
+STEP 6: Frontend Updates UI
+──────────────────────────
+Frontend updates state:
+  ├─ Add paper to papers array
+  ├─ Clear form inputs
+  ├─ Show success message
+  └─ Navigate to paper detail view (optional)
+
+User sees their created paper on screen ✓
+
+
+═══════════════════════════════════════════════════════════════════════════════
+🔄 BOOKMARK FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+ADDING A BOOKMARK:
+
+User clicks bookmark button on paper "AI in Healthcare"
+    ↓
+Frontend calls: bookmarkService.addBookmark("clh3bjk5n0000qhz3c1d2e3f4")
+    ↓
+POST /api/bookmarks/clh3bjk5n0000qhz3c1d2e3f4
+Authorization: Bearer {token}
+    ↓
+BookmarkController.addBookmark()
+    ├─ Verify user authenticated (req.user.id = "user-123")
+    ├─ Get paperId from params ("clh3bjk5n0000qhz3c1d2e3f4")
+    ├─ Call BookmarkService.addBookmark("user-123", "clh3bjk5n0000qhz3c1d2e3f4")
+    │
+    └─ Prisma upsert (create if not exists, do nothing if exists):
+         INSERT INTO "Bookmark" (id, userId, paperId)
+         VALUES ('new-uuid', 'user-123', 'clh3bjk5n0000qhz3c1d2e3f4')
+         ON CONFLICT ON CONSTRAINT "Bookmark_userId_paperId_key"
+         DO NOTHING
+    ↓
+Response: HTTP 201 Created with bookmark object
+    ↓
+Frontend updates UI:
+    ├─ Change button to "★ Bookmarked" (filled star)
+    ├─ Add paper to bookmarks list
+    └─ Show success toast
+
+
+REMOVING A BOOKMARK:
+
+User clicks bookmark button again (now showing as bookmarked)
+    ↓
+Frontend calls: bookmarkService.removeBookmark("clh3bjk5n0000qhz3c1d2e3f4")
+    ↓
+DELETE /api/bookmarks/clh3bjk5n0000qhz3c1d2e3f4
+Authorization: Bearer {token}
+    ↓
+BookmarkController.removeBookmark()
+    ├─ Verify user authenticated
+    ├─ Delete bookmark where userId = "user-123" AND paperId = "clh3bjk5n0000qhz3c1d2e3f4"
+    │
+    └─ Prisma:
+         DELETE FROM "Bookmark"
+         WHERE userId = 'user-123' AND paperId = 'clh3bjk5n0000qhz3c1d2e3f4'
+    ↓
+Response: HTTP 200 OK with success message
+    ↓
+Frontend updates UI:
+    ├─ Change button to "☆ Bookmark" (empty star)
+    ├─ Remove paper from bookmarks list
+    └─ Show success toast
+
+
+═══════════════════════════════════════════════════════════════════════════════
+🚨 ERROR HANDLING FLOW
+═══════════════════════════════════════════════════════════════════════════════
+
+When a request fails, the error flows through the error handler:
+
+Scenario: User tries to update paper they don't own
+
+PUT /api/research/other-users-paper-id
+Authorization: Bearer {token}
+
+ResearchController checks ownership:
+    const paper = await prisma.researchPaper.findFirst({
+      where: {
+        id: "other-users-paper-id",
+        userId: "my-user-id"  ← ⚠️  Fails! Paper owned by someone else
+      }
+    })
+
+If not found:
+    throw notFoundError("Research paper not found")
+
+notFoundError() creates:
+    new ApiError(404, "Research paper not found")
+
+errorHandler middleware catches it:
+    ├─ Checks if error is ApiError (yes)
+    ├─ Extracts status code (404)
+    ├─ Formats response
+    └─ Sends HTTP response:
+       {
+         "success": false,
+         "message": "Research paper not found"
+       }
+
+Browser receives 404 response
+    ↓
+Axios error interceptor catches it:
+    ├─ Checks status code (401, 403, 404, etc)
+    ├─ If 401: clears token and redirects to login
+    ├─ Otherwise: rejects promise
+    └─ Frontend catches error and shows message
+
+Frontend shows error message: "Paper not found"
+
+
+═══════════════════════════════════════════════════════════════════════════════
+📊 DATA FLOW DIAGRAM: Search to Bookmark
+═══════════════════════════════════════════════════════════════════════════════
+
+Frontend Search                        Backend Processing                Database
+─────────────────────────────────────────────────────────────────────────────────
+
+User types "AI"                 
+in search box                        
+        │                             
+        ├─ 300ms debounce
+        │
+        └─ GET /search?search=AI
+             │
+             ├─ authMiddleware (verify token)
+             │
+             ├─ validation (check params)
+             │
+             └─ searchResearchPapers()
+                  │
+                  └─ researchService
+                       │
+                       └─ prisma.researchPaper.findMany({
+                            where: {
+                              OR: [
+                                {title: {contains: "AI"}},
+                                {content: {contains: "AI"}},
+                                {authors: {hasSome: ["AI"]}}
+                              ]
+                            }
+                          })
+                             │
+                             └─ PostgreSQL Query         SELECT * FROM "ResearchPaper"
+                                                         WHERE title ILIKE '%AI%'
+                                                            OR content ILIKE '%AI%'
+                                                            OR 'AI' = ANY(authors)
+                                                         LIMIT 10
+                                                           │
+                                                         Search index checks
+                                                         Find matching rows
+                                                         Return 10 results
+                                                           │
+                       Returns array of papers ◄──────────┘
+                  │
+                  └─ count total matches
+                       │
+                  Returns pagination info
+                       │
+             HTTP 200 JSON response
+                  │
+        ◄─────────┘
+        │
+    Axios.interceptor
+        │
+    Updates state
+        │
+    React re-renders
+        │
+    Display results [Paper 1] [Paper 2] ...
+        │
+    User clicks bookmark on Paper 1
+        │
+        └─ POST /bookmarks/paper-1-id
+             │
+             ├─ Verify user
+             │
+             ├─ bookmarkService.addBookmark()
+             │
+             └─ prisma.bookmark.upsert            INSERT INTO "Bookmark"
+                  │                                VALUES (...)
+                  └─ Success              ◄────────┘
+                       │
+             HTTP 201 response
+                  │
+        ◄─────────┘
+        │
+    Update button to "★"
+        │
+    Add to bookmarks list
+        │
+    Show "Added to bookmarks" toast
+
+
+═══════════════════════════════════════════════════════════════════════════════
+🎯 KEY TAKEAWAYS
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Every Frontend request includes token in Authorization header
+2. Backend middleware verifies token on protected routes
+3. Controllers coordinate between routes and services
+4. Services contain business logic (UserService, ResearchService, etc)
+5. Prisma ORM translates code to SQL safely
+6. Database enforces relationships and constraints
+7. All responses go through error handler for consistency
+8. Frontend uses axios interceptors for automatic token inclusion
+9. Errors flow back through the same path
+10. Database ensures data integrity (foreign keys, cascades, indexes)
+
+This architecture ensures:
+✅ Security (JWT tokens, password hashing)
+✅ Consistency (error handling, validation)
+✅ Performance (indexes, pagination)
+✅ Maintainability (separation of concerns)
+✅ Type safety (TypeScript, Prisma)
+✅ Scalability (stateless, horizontal scaling ready)
+
+═══════════════════════════════════════════════════════════════════════════════

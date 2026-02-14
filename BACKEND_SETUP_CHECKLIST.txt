@@ -1,0 +1,390 @@
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  RESEARCHSPHEREHUB - BACKEND SETUP CHECKLIST                 ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+Follow these steps in order. Estimated time: 30-45 minutes
+
+
+PHASE 1: DATABASE SETUP (10-15 minutes)
+═══════════════════════════════════════════════════════════════════════════════
+
+⬜ Step 1.1: Verify PostgreSQL is installed
+   ├─ Windows: Search "SQL Shell (psql)" or check in pgAdmin
+   ├─ Mac: brew install postgresql (if not installed)
+   ├─ Linux: sudo apt-get install postgresql
+   └─ Verify: Run `psql --version` in terminal
+
+⬜ Step 1.2: Start PostgreSQL
+   ├─ Windows: PostgreSQL should auto-start
+   ├─ Mac: brew services start postgresql
+   ├─ Docker: docker start researchsphere-postgres (if using Docker)
+   └─ Verify: psql -U postgres (should connect)
+
+⬜ Step 1.3: Create Database and User
+   ├─ Open terminal/psql and run:
+   │  psql -U postgres
+   │  (You may need to enter password)
+   │
+   ├─ Then copy & paste these SQL commands:
+   │  CREATE USER researchsphere_user WITH PASSWORD 'password123';
+   │  CREATE DATABASE researchsphere_db OWNER researchsphere_user;
+   │  GRANT ALL PRIVILEGES ON DATABASE researchsphere_db TO researchsphere_user;
+   │  \c researchsphere_db
+   │  GRANT ALL PRIVILEGES ON SCHEMA public TO researchsphere_user;
+   │
+   └─ Verify: \l (should show researchsphere_db)
+
+⬜ Step 1.4: Test Database Connection
+   ├─ Exit psql: \q
+   ├─ Test new user:
+   │  psql -U researchsphere_user -d researchsphere_db -h localhost
+   │  (Password: password123)
+   └─ Should connect successfully
+
+✅ DATABASE SETUP COMPLETE
+
+
+PHASE 2: BACKEND INSTALLATION (10-15 minutes)
+═══════════════════════════════════════════════════════════════════════════════
+
+⬜ Step 2.1: Navigate to Backend folder
+   └─ cd Backend
+
+⬜ Step 2.2: Install dependencies
+   ├─ npm install
+   │  (This installs everything from package.json)
+   └─ Wait for completion (2-5 minutes)
+
+⬜ Step 2.3: Create .env file
+   ├─ Windows (PowerShell):
+   │  Copy-Item .env.example .env
+   │
+   ├─ Mac/Linux:
+   │  cp .env.example .env
+   │
+   └─ Verify: You should see .env in Backend folder
+
+⬜ Step 2.4: Edit .env file
+   ├─ Open Backend/.env in VS Code
+   ├─ Update these lines:
+   │  DATABASE_URL="postgresql://researchsphere_user:password123@localhost:5432/researchsphere_db"
+   │  JWT_SECRET="your_secret_key_min_32_characters_long_12345678"
+   │  CORS_ORIGIN="http://localhost:5173"
+   │  PORT=5000
+   │  NODE_ENV="development"
+   │
+   └─ Save file (Ctrl+S)
+
+⬜ Step 2.5: Generate Prisma Client
+   └─ npm run prisma:generate
+
+⬜ Step 2.6: Run Database Migrations
+   ├─ npm run migrate
+   │  (This creates tables in your PostgreSQL database)
+   └─ You should see migration output
+
+⬜ Step 2.7: Verify Database Tables Created
+   ├─ npm run prisma:studio
+   │  (Opens browser at http://localhost:5555)
+   ├─ Should show: User, ResearchPaper, Bookmark tables
+   └─ Close Prisma Studio (Ctrl+C)
+
+✅ BACKEND INSTALLATION COMPLETE
+
+
+PHASE 3: START BACKEND SERVER (5 minutes)
+═══════════════════════════════════════════════════════════════════════════════
+
+⬜ Step 3.1: Start development server
+   └─ npm run dev
+
+⬜ Step 3.2: Verify server is running
+   ├─ You should see output like:
+   │  ╔════════════════════════════════════════════╗
+   │  ║   ResearchSphereHub Backend Server Started ║
+   │  ╚════════════════════════════════════════════╝
+   │
+   │  📌 Server running on: http://localhost:5000
+   │
+   ├─ Open browser: http://localhost:5000/api/health
+   └─ Should show: { "status": "OK", "timestamp": "...", "environment": "development" }
+
+✅ BACKEND SERVER RUNNING
+
+
+PHASE 4: TEST THE BACKEND (Optional, 10 minutes)
+═══════════════════════════════════════════════════════════════════════════════
+
+⬜ Step 4.1: Test Registration Endpoint
+   ├─ Open new terminal (keep server running)
+   ├─ Use curl or Postman:
+   │
+   │  curl -X POST http://localhost:5000/api/auth/register \
+   │    -H "Content-Type: application/json" \
+   │    -d '{
+   │      "email": "testuser@example.com",
+   │      "name": "Test User",
+   │      "password": "test123",
+   │      "confirmPassword": "test123"
+   │    }'
+   │
+   ├─ Should return:
+   │  {
+   │    "success": true,
+   │    "message": "Registration successful",
+   │    "data": {
+   │      "user": { "id": "...", "email": "...", "name": "...", "role": "USER" },
+   │      "token": "eyJ..."
+   │    }
+   │  }
+   │
+   └─ Save the token (long string in response)
+
+⬜ Step 4.2: Test Login Endpoint
+   ├─ curl -X POST http://localhost:5000/api/auth/login \
+   │    -H "Content-Type: application/json" \
+   │    -d '{
+   │      "email": "testuser@example.com",
+   │      "password": "test123"
+   │    }'
+   │
+   └─ Should return new token
+
+⬜ Step 4.3: Test Protected Endpoint
+   ├─ Replace TOKEN with actual token from step 4.1:
+   │
+   │  curl http://localhost:5000/api/auth/me \
+   │    -H "Authorization: Bearer TOKEN"
+   │
+   └─ Should return user profile
+
+✅ BACKEND TESTED & WORKING
+
+
+PHASE 5: SETUP FRONTEND (Optional, 5-10 minutes)
+═══════════════════════════════════════════════════════════════════════════════
+
+⬜ Step 5.1: Open new terminal and navigate to Frontend
+   └─ cd Frontend
+
+⬜ Step 5.2: Install dependencies
+   └─ npm install
+
+⬜ Step 5.3: Create .env.local file
+   ├─ Windows: echo 'VITE_API_URL=http://localhost:5000/api' > .env.local
+   ├─ Mac/Linux: echo 'VITE_API_URL=http://localhost:5000/api' > .env.local
+   └─ Verify: Should see .env.local with content
+
+⬜ Step 5.4: Start Frontend server
+   └─ npm run dev
+
+⬜ Step 5.5: Open in Browser
+   ├─ Frontend will show: Local: http://localhost:5173
+   └─ Open http://localhost:5173 in your browser
+
+✅ BOTH FRONTEND & BACKEND RUNNING
+
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL VERIFICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+You should have 3 terminals open:
+
+Terminal 1: Backend Server
+   Location: Backend/
+   Command: npm run dev
+   Expected Output: "Server running on: http://localhost:5000"
+   Status: ✓ Running
+
+Terminal 2 (Optional): Prisma Studio
+   Location: Backend/
+   Command: npm run prisma:studio
+   Expected Output: Opens http://localhost:5555
+   Status: ✓ Running (or can start later)
+
+Terminal 3: Frontend Server
+   Location: Frontend/
+   Command: npm run dev
+   Expected Output: "Local: http://localhost:5173"
+   Status: ✓ Running
+
+Browser:
+   Frontend URL: http://localhost:5173
+   Backend URL: http://localhost:5000/api/health
+   Status: ✓ Both showing content
+
+═══════════════════════════════════════════════════════════════════════════════
+QUICK REFERENCE COMMANDS
+═══════════════════════════════════════════════════════════════════════════════
+
+DATABASE
+────────
+psql -U postgres               # Connect to PostgreSQL (as admin)
+psql -U researchsphere_user -d researchsphere_db   # Connect to app database
+\l                             # List databases
+\dt                            # List tables
+\du                            # List users
+\q                             # Quit psql
+
+BACKEND
+───────
+npm install                    # Install dependencies
+npm run dev                    # Start development server
+npm run build                  # Compile TypeScript
+npm run start                  # Run compiled code
+npm run migrate                # Run database migrations
+npm run prisma:studio         # Open database GUI
+npm run type-check            # Check TypeScript errors
+npm run lint                  # Lint code
+
+FRONTEND
+────────
+npm install                    # Install dependencies
+npm run dev                    # Start development server
+npm run build                  # Build for production
+npm run preview               # Preview production build
+
+GIT
+───
+git add .                      # Stage changes
+git commit -m "message"        # Commit changes
+git push                       # Push to repository
+
+═══════════════════════════════════════════════════════════════════════════════
+COMMON ISSUES & SOLUTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+❌ "error: connect ECONNREFUSED"
+   → PostgreSQL is not running
+   → Solution: Start PostgreSQL (brew services start postgresql on Mac)
+
+❌ "port 5000 already in use"
+   → Another app is using port 5000
+   → Solution: Change PORT in .env or kill the process
+
+❌ "DATABASE_URL not set" or "JWT_SECRET not set"
+   → .env file missing or not configured
+   → Solution: Copy .env.example to .env and fill in values
+
+❌ "relation 'User' does not exist"
+   → Tables not created
+   → Solution: npm run migrate
+
+❌ "CORS error in browser"
+   → Frontend and backend on different origins
+   → Solution: Check CORS_ORIGIN in .env matches frontend URL
+
+❌ "Token invalid/expired"
+   → JWT token not valid anymore
+   → Solution: Login again to get new token
+
+═══════════════════════════════════════════════════════════════════════════════
+FILE STRUCTURE YOU SHOULD SEE
+═══════════════════════════════════════════════════════════════════════════════
+
+researchsphere-hub/
+├── Backend/                    ← Backend folder
+│   ├── src/                    ← Source code
+│   │   ├── index.ts           ← Server file
+│   │   ├── controllers/       ← API handlers
+│   │   ├── routes/            ← API endpoints
+│   │   ├── services/          ← Business logic
+│   │   ├── middleware/        ← Middleware
+│   │   ├── utils/             ← Utilities
+│   │   └── lib/               ← Prisma client
+│   │
+│   ├── prisma/                ← Database files
+│   │   ├── schema.prisma      ← Database schema
+│   │   └── migrations/        ← SQL migrations
+│   │
+│   ├── .env                   ← ⚠️  Configuration (DO NOT COMMIT)
+│   ├── .env.example           ← Example .env
+│   ├── package.json           ← Dependencies
+│   ├── tsconfig.json          ← TypeScript config
+│   └── ...
+│
+├── Frontend/                   ← Frontend folder
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   ├── lib/
+│   │   └── services/          ← Will add API services here
+│   │
+│   ├── .env.local             ← ⚠️  Environment (DO NOT COMMIT)
+│   ├── package.json
+│   └── ...
+│
+└── README.md                   ← Project README
+
+═══════════════════════════════════════════════════════════════════════════════
+NEXT STEPS AFTER SETUP
+═══════════════════════════════════════════════════════════════════════════════
+
+1. INTEGRATE FRONTEND
+   ├─ Copy code from FRONTEND_INTEGRATION_EXAMPLES.ts
+   ├─ Create File: Frontend/src/services/authService.ts
+   ├─ Create File: Frontend/src/services/researchService.ts
+   ├─ Create File: Frontend/src/services/bookmarkService.ts
+   └─ Setup API client in Frontend/src/lib/api.ts
+
+2. CREATE PAGES
+   ├─ Use examples from REACT_COMPONENT_EXAMPLES.tsx
+   ├─ Create: Frontend/src/pages/LoginPage.tsx
+   ├─ Create: Frontend/src/pages/SearchPage.tsx
+   ├─ Create: Frontend/src/pages/BookmarksPage.tsx
+   └─ Create: Frontend/src/pages/UploadPage.tsx
+
+3. TEST EVERYTHING
+   ├─ Register a user
+   ├─ Login
+   ├─ Create a paper
+   ├─ Search papers
+   ├─ Add bookmarks
+   └─ View bookmarks
+
+4. DEPLOY (Later)
+   ├─ Push to GitHub
+   ├─ Deploy backend (Heroku, Railway, Render)
+   ├─ Deploy frontend (Vercel, Netlify)
+   └─ Connect production URLs
+
+═══════════════════════════════════════════════════════════════════════════════
+DOCUMENTATION REFERENCE
+═══════════════════════════════════════════════════════════════════════════════
+
+File                                 Location           What it Contains
+─────────────────────────────────────────────────────────────────────────────
+README.md                           Backend/           Full project overview
+SETUP_GUIDE.md                      Backend/           Detailed setup & API docs
+QUICK_START.md                      Backend/           Quick reference
+DATABASE_GUIDE.md                   Backend/           PostgreSQL tutorials
+FRONTEND_INTEGRATION_EXAMPLES.ts    Backend/           React service examples
+REACT_COMPONENT_EXAMPLES.tsx        Backend/           Example React components
+BACKEND_COMPLETE_BUILD_SUMMARY.txt  Root/              Everything created
+THIS FILE                           Root/              Step-by-step checklist
+
+═══════════════════════════════════════════════════════════════════════════════
+🎉 YOU'RE READY TO CODE!
+═══════════════════════════════════════════════════════════════════════════════
+
+Your complete backend is ready. Now:
+
+1. Follow the checklist above
+2. Get both servers running
+3. Read FRONTEND_INTEGRATION_EXAMPLES.ts and REACT_COMPONENT_EXAMPLES.tsx
+4. Start building your frontend features
+5. Connect them to the API
+6. Build amazing research platform! 🚀
+
+The backend is production-ready and handles:
+✅ Authentication
+✅ Database management
+✅ Error handling
+✅ Validation
+✅ Type safety
+✅ CORS
+
+Everything you need to build the frontend is here!
+
+═══════════════════════════════════════════════════════════════════════════════

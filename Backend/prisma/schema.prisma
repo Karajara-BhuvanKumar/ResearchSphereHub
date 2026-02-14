@@ -1,0 +1,79 @@
+// This is your Prisma schema file.
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - for authentication and profile
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String
+  password  String     // hashed with bcrypt
+  role      UserRole   @default(USER)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Relations
+  researchPapers ResearchPaper[]
+  bookmarks      Bookmark[]
+
+  @@index([email])
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+// Research data model - stores papers, journals, conferences
+model ResearchPaper {
+  id          String   @id @default(cuid())
+  title       String
+  authors     String[] // array of author names
+  type        ResearchType
+  content     String   // abstract or summary
+  source      String   // URL or citation source
+  publishDate DateTime?
+  tags        String[] // for easy filtering
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookmarks   Bookmark[]
+
+  @@index([userId])
+  @@index([type])
+  @@index([title])
+  @@index([tags])
+}
+
+enum ResearchType {
+  PAPER
+  JOURNAL
+  CONFERENCE
+}
+
+// Bookmark model - user's favorite research items
+model Bookmark {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  paperId    String
+  paper      ResearchPaper @relation(fields: [paperId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, paperId]) // prevent duplicate bookmarks
+  @@index([userId])
+  @@index([paperId])
+}
